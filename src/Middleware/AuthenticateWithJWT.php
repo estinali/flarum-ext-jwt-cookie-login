@@ -65,6 +65,8 @@ class AuthenticateWithJWT implements MiddlewareInterface
             return null;
         }
 
+        $jwt = str_replace('Bearer ', '', $jwt);
+
         JWT::$leeway = (int)$this->settings->get('jwt-cookie-login.expirationLeeway');
 
         try {
@@ -74,14 +76,7 @@ class AuthenticateWithJWT implements MiddlewareInterface
             return null;
         }
 
-        $audience = $this->settings->get('jwt-cookie-login.audience');
-
-        if ($audience && (!isset($payload->aud) || $payload->aud !== $audience)) {
-            $this->logInDebugMode('Invalid JWT audience (' . ($payload->aud ?? 'missing') . ')');
-            return null;
-        }
-
-        $user = User::query()->where('jwt_subject', $payload->sub)->first();
+        $user = User::query()->where('jwt_subject', $payload->user_id)->first(); //changed from $payload->sub
 
         if ($user) {
             $this->logInDebugMode('Authenticating existing JWT user [' . $user->jwt_subject . ' / ' . $user->id . ']');
@@ -89,53 +84,17 @@ class AuthenticateWithJWT implements MiddlewareInterface
             return $user;
         }
 
+        $usernameTemplate = $this->settings->get('jwt-cookie-login.usernameTemplate'); //expected 'username'
+        $emailTemplate = $this->settings->get('jwt-cookie-login.emailTemplate'); //expected 'email'
+
         $registerPayload = [
             'attributes' => [
                 'isEmailConfirmed' => true,
                 'password' => Str::random(32),
+                $usernameTemplate => $payload->{$usernameTemplate},
+                $emailTemplate => $payload->{$emailTemplate},
             ],
         ];
-
-        if ($registrationHook = $this->settings->get('jwt-cookie-login.registrationHook')) {
-            $authorization = $this->settings->get('jwt-cookie-login.authorizationHeader');
-
-            $hookUrl = $this->replaceStringParameters($registrationHook, $payload);
-
-            $response = $this->client->post($hookUrl, [
-                'headers' => [
-                    'Authorization' => $authorization ?: ('Token ' . $jwt),
-                ],
-                'json' => [
-                    'data' => [
-                        'type' => 'users',
-                        'id' => $payload->sub,
-                    ],
-                ],
-            ]);
-
-            $responseBody = $response->getBody()->getContents();
-
-            $this->logInDebugMode("Response of POST $hookUrl:" . PHP_EOL . $responseBody);
-
-            $registerPayload = array_merge_recursive(
-                $registerPayload,
-                Arr::get(Utils::jsonDecode($responseBody, true), 'data', [])
-            );
-        }
-
-        if (
-            !Arr::has($registerPayload, 'attributes.username') &&
-            $usernameTemplate = $this->settings->get('jwt-cookie-login.usernameTemplate')
-        ) {
-            $registerPayload['attributes']['username'] = $this->replaceStringParameters($usernameTemplate, $payload);
-        }
-
-        if (
-            !Arr::has($registerPayload, 'attributes.email') &&
-            $emailTemplate = $this->settings->get('jwt-cookie-login.emailTemplate')
-        ) {
-            $registerPayload['attributes']['email'] = $this->replaceStringParameters($emailTemplate, $payload);
-        }
 
         $actor = User::query()->where('id', $this->settings->get('jwt-cookie-login.actorId') ?: 1)->firstOrFail();
 
@@ -149,7 +108,7 @@ class AuthenticateWithJWT implements MiddlewareInterface
         $user = $bus->dispatch(new RegisterUser($actor, $registerPayload));
 
         // TODO: move to user edit listener
-        $user->jwt_subject = $payload->sub;
+        $user->jwt_subject = $payload->user_id; //changed from $payload->sub
         $user->save();
 
         $this->logInDebugMode('Authenticating new JWT user [' . $user->jwt_subject . ' / ' . $user->id . ']');
@@ -176,6 +135,7 @@ class AuthenticateWithJWT implements MiddlewareInterface
     protected function replaceStringParameters(string $string, $payload): string
     {
         return preg_replace_callback('~{([a-zA-Z0-9_-]+)}~', function ($matches) use ($payload) {
+
             if (!isset($payload->{$matches[1]})) {
                 throw new \Exception('Replacement pattern {' . $matches[1] . '} was not found in JWT payload');
             }
