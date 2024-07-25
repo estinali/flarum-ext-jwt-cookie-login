@@ -36,7 +36,7 @@
             "title": "JWT Cookie Login",
             "category": "feature",
             "icon": {
-                "name": "fas fa-cookie",
+                "name": "fas fa-cookie-bite",
                 "backgroundColor": "#684ba6",
                 "color": "#fff"
             }
