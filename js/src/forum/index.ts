@@ -10,9 +10,9 @@ app.initializers.add('jwt-cookie-login', () => {
         const href = app.forum.attribute<string | false>('logoutRedirect');
 
         // False is used to explicitly say the logout button should be hidden without any replacement
-        if (href || href === false) {
-            items.remove('logOut');
-        }
+     //   if (href || href === false) {
+     //       items.remove('logOut');
+     //   }
 
         if (href) {
             items.add('logOutLink', LinkButton.component({
