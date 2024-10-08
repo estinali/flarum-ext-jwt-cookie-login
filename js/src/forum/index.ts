@@ -6,7 +6,7 @@ import SessionDropdown from 'flarum/forum/components/SessionDropdown';
 import ForumApplication from 'flarum/forum/ForumApplication';
 
 app.initializers.add('jwt-cookie-login', () => {
-    extend(SessionDropdown.prototype, 'items', function (items) {
+   /* extend(SessionDropdown.prototype, 'items', function (items) {
         const href = app.forum.attribute<string | false>('logoutRedirect');
 
         // False is used to explicitly say the logout button should be hidden without any replacement
@@ -20,7 +20,7 @@ app.initializers.add('jwt-cookie-login', () => {
                 href,
             }, app.translator.trans('core.forum.header.log_out_button')));
         }
-    });
+    });*/
 
     extend(ForumApplication.prototype, 'mount', function () {
         const url = app.forum.attribute<string>('jwtIframe');
